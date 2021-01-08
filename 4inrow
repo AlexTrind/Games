@@ -1,0 +1,308 @@
+import numpy as np
+import random
+
+
+def id_board(board):
+    # function to generate board id
+    l = []
+    for x in board:
+        for y in list(x):
+            l.append(str(y))
+    return "".join(l)
+
+
+def visualizer(board):
+    for x in range(6):
+        collector = []
+        for y in range(7):
+            collector.append(str(board[y, x]))
+
+        print(" ".join(collector))
+
+
+def drop_coin(board, column, player):
+    # takes a column array and a player id to drop a coin in last empty slot
+    row = np.count_nonzero(board[column] == 0) - 1
+    if row > -1:
+        board[column, row] = player
+    return board, column, row
+
+
+def column_selector_player(board):
+    # takes a board configuration and checks for available non-full
+    # columns and prompts user for a column to drop a coin returns column index
+    while True:
+        if np.count_nonzero(board == 0) == 42:
+            choice = 3
+            break
+        choice = int(input("Select column: (1 to 7) ")) - 1
+        if 7 > choice > -1 and np.count_nonzero(board[choice] == 0) != 0:
+            break
+    return choice
+
+
+def column_selector_random(board):
+    # takes a board configuration and checks for available non-full
+    # columns and prompts user for a column to drop a coin returns column index
+    while True:
+        if np.count_nonzero(board == 0) == 42:
+            choice = 3
+            break
+        choice = random.randint(0, 6)
+        if np.count_nonzero(board[choice] == 0) != 0:
+            break
+    return choice
+
+
+def win_move(board, seed):
+    # outputs if current board has a win line, outputs all current lines configs going through seed as a dictionary
+
+    mapa = grow_seed_lines(board, seed)
+    win = False
+    for key in mapa.keys():
+        if len(mapa[key][1]) >= 4:
+            if mapa[key][0] == 4:
+                win = True
+                return win
+    return win
+
+
+# AI section ------------------------------------------------------------------------------------------------------
+
+
+def grow_seed_lines(board, seed):
+    # outputs if current board has a win line, outputs all current lines configs going through seed as a dictionary
+    library = {
+        "v": "column",
+        "r": "row",
+        "dl": "diagonal left",
+        "dr": "diagonal right"
+    }
+    mapa = {}
+
+    def vector_grow(board, seed, vector):
+        # function returns a line count for a given player starting from a player new position, return sequence
+        # along line for AI analysis, function is independent of player assigned
+
+        player = board[seed[0], seed[1]]
+
+        def off_limit(pointer):
+            # returns true if pointer is inside array
+            if -1 < pointer[0] < 7 and -1 < pointer[1] < 6:
+                return True
+
+        vectors = {
+            "v": [0, 1, 0, -1],
+            "r": [1, 0, -1, 0],
+            "dl": [1, 1, -1, -1],
+            "dr": [1, -1, -1, 1]
+        }
+        sequence = []
+        # switch variable introduced to activate or deactivate temporarily count
+        switch = True
+        count = 0
+        # checks down/right first using the chosen vector
+        pointer = [seed[0], seed[1]]
+        while off_limit(pointer):
+            pos = board[pointer[0], pointer[1]]
+            if pos == player or pos == 0:
+                pointer[0] = pointer[0] + vectors[vector][0]
+                pointer[1] = pointer[1] + vectors[vector][1]
+                sequence.append(pos)
+                if pos == player and switch:
+                    count += 1
+                else:
+                    switch = False
+            else:
+                # sequence.append(pos)
+                break
+        # checks up/left first using the chosen vector erasing seed from count
+        switch = True
+        count -= 1
+        pointer = [seed[0], seed[1]]
+        del sequence[0]
+        while off_limit(pointer):
+            pos = board[pointer[0], pointer[1]]
+            if pos == player or pos == 0:
+                pointer[0] = pointer[0] + vectors[vector][2]
+                pointer[1] = pointer[1] + vectors[vector][3]
+                sequence.insert(0, pos)
+                if pos == player and switch:
+                    count += 1
+                else:
+                    switch = False
+            else:
+                # sequence.insert(0, pos)
+                break
+        return count, sequence
+
+    for key in library.keys():
+        a = vector_grow(board, seed, key)
+        mapa[library[key]] = a[0], a[1]
+
+    return mapa
+
+
+def scorer(mapa, column, switch="Win"):
+    # takes a map from any player and creates a predicted score
+    scoring = {"center": 4,
+               "line2": 2,
+               "line3": 5,
+               "line4": 1000,
+               "opline2": -2,
+               "opline3": -100,
+               "opline4": -5000}
+    score = 0
+    if column == 3:
+        score += scoring["center"]
+    if switch == "Win":
+        for key in mapa.keys():
+            if len(mapa[key][1]) >= 4:
+                if mapa[key][0] == 4:
+                    return scoring["line4"]
+                if mapa[key][0] == 3:
+                    score += scoring["line3"]
+                if mapa[key][0] == 2:
+                    score += scoring["line2"]
+    if switch == "Loose":
+        for key in mapa.keys():
+            if len(mapa[key][1]) >= 4:
+                if mapa[key][0] == 4:
+                    return scoring["opline4"]
+                if mapa[key][0] == 3:
+                    score += scoring["opline3"]
+                if mapa[key][0] == 2:
+                    score += scoring["opline2"]
+    return score
+
+
+def column_selector_ai(board, first_player):
+    if np.count_nonzero(board == 0) == 42:
+        column = 3
+        # player switch section
+    else:
+        if first_player == 1:
+            follow_player = 2
+        else:
+            follow_player = 1
+
+        options = {}
+
+        # board_id = id_board(board)
+
+        for x in range(7):
+            if np.count_nonzero(board[x] == 0) != 0:
+                current = np.array(board)
+                # print(x)
+                grandsons_scoring = []
+                son = drop_coin(current, x, first_player)
+                son_scoring = scorer(grow_seed_lines(son[0], (son[1], son[2])), son[1])
+                # print("future board: \n{}".format(future_board[0]))
+                for y in range(7):
+                    # print(y)
+                    dummy_son = np.array(son[0])
+                    if np.count_nonzero(dummy_son[y] == 0) != 0:
+                        grandson = drop_coin(dummy_son, y, follow_player)
+                        grandsons_scoring.append(scorer(grow_seed_lines(grandson[0], (grandson[1], grandson[2])), grandson[1], "Loose"))
+                        # print("cenario {}: \n{}".format(y, grandson[0]))
+                        # print(grandson[0])
+                        # print(grandsons_scoring)
+                final_score = son_scoring + min(grandsons_scoring)
+                options[x] = [final_score, son_scoring, min(grandsons_scoring), grandsons_scoring]
+
+        column = 3
+        column_score = -1000
+        for key in options.keys():
+            score_tmp = options[key][0]
+            if score_tmp > column_score:
+                column = key
+                column_score = score_tmp
+        return column
+    return column
+
+
+levels = {
+        "easy": 1,
+        "average": 3,
+        "hard": 5
+    }
+
+user = input("Choose level Easy, Average or Hard: (type easy, average or hard)")
+
+
+# enf of AI section -------------------------------------------------------------------------------------------------
+counter_win_ai = 0
+counter_loose_ai = 0
+draws = 0
+
+for x in range(10000):
+    tracking = []
+    board = np.zeros([7, 6], dtype=int)
+
+    while True:
+        # game sequence, PX stores the position of the new coin, condition
+        # stores a win boolean and a map around last play
+
+        try:
+            player = 1
+            # visualizer(board)
+            if random.choice(range(1, 7)) > levels[user]:
+                P1 = drop_coin(board, column_selector_random(board), player)
+            else:
+                # P1 = drop_coin(board, column_selector_random(board), player)
+                # P1 = drop_coin(board, column_selector_player(board), player)
+                P1 = drop_coin(board, column_selector_ai(board, player), player)
+            condition = win_move(board, [P1[1], P1[2]])
+            a1 = id_board(board)
+            tracking.append(a1)
+            if condition:
+                # print("Player one wins")
+                b1 = np.count_nonzero(board == 0)
+                tracking.append(str(player))
+                tracking.append(str(b1))
+                tracking.append(str(-b1))
+                # print(tracking)
+                counter_win_ai += 1
+                break
+            elif np.count_nonzero(board == 0) == 0:
+                draws += 1
+                break
+        except:
+            draws += 1
+            break
+
+        try:
+            player = 2
+            if random.choice(range(1, 7)) > levels[user]:
+                P2 = drop_coin(board, column_selector_random(board), player)
+            else:
+                # P2 = drop_coin(board, column_selector_random(board), player)
+                # P2 = drop_coin(board, column_selector_player(board), player)
+                P2 = drop_coin(board, column_selector_ai(board, player), player)
+            condition = win_move(board, [P2[1], P2[2]])
+            a2 = id_board(board)
+            tracking.append(a2)
+
+            if condition:
+                # print("Player two wins")
+                b2 = np.count_nonzero(board == 0)
+                tracking.append(str(player))
+                tracking.append(str(-b2))
+                tracking.append(str(b2))
+                # print(tracking)
+                counter_loose_ai += 1
+                break
+            elif np.count_nonzero(board == 0) == 0:
+                draws += 1
+                break
+        except:
+            draws += 1
+            break
+
+    with open("library18.txt", "a") as f:
+        f.write(str(tracking))
+        f.write("\n")
+
+print(counter_win_ai)
+print(counter_loose_ai)
+print(draws)
