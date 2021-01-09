@@ -1,0 +1,138 @@
+import numpy as np
+import random
+
+PLAYER = 1
+AI = 2
+COLUMN_COUNT = 3
+ROW_COUNT = 3
+LINE = 3
+SUBLINE = 2
+
+
+def create_board():
+    return np.zeros((3, 3), dtype=int)
+
+
+def play(board, row, col, player):
+    board[row, col] = player
+
+
+def is_valid(board, row, col):
+    return board[row, col] == 0
+
+
+def is_full(board):
+    return np.count_nonzero(board == 0) == 0
+
+
+def play_user():
+    row = int(input("select row (0-2):"))
+    col = int(input("select column (0-2):"))
+    return row, col
+
+
+def play_random():
+    row = random.choice(range(ROW_COUNT))
+    col = random.choice(range(COLUMN_COUNT))
+    return row, col
+
+
+def is_line(board, player, line):
+    # check horizontal lines
+    for row in range(ROW_COUNT):
+        if np.count_nonzero(board[row, :] == player) == line and np.count_nonzero(board[row, :] == 0) == LINE - line:
+            return True
+    # check vertical lines
+    for col in range(COLUMN_COUNT):
+        if np.count_nonzero(board[:, col] == player) == line and np.count_nonzero(board[:, col] == 0) == LINE - line:
+            return True
+    # check diagonal ascending lines
+    count = 0
+    count_zero = 0
+    for i in range(ROW_COUNT):
+        if board[ROW_COUNT - 1 - i, i] == player:
+            count += 1
+        if board[ROW_COUNT - 1 - i, i] == 0:
+            count_zero += 1
+        if count == line and count_zero == LINE - line:
+            return True
+    # check diagonal descending lines
+    count = 0
+    count_zero = 0
+    for i in range(ROW_COUNT):
+        if board[i, i] == player:
+            count += 1
+        if board[i, i] == 0:
+            count_zero += 1
+        if count == line and count_zero == LINE - line:
+            return True
+    return False
+
+
+# AI section ---------
+
+# scoring system
+line2 = 5
+line3 = 100
+opline2 = -6
+
+
+def scorer(board):
+    score = 0
+    if is_line(board, AI, LINE):
+        score += line3
+    if is_line(board, AI, SUBLINE):
+        score += line2
+    if is_line(board, PLAYER, SUBLINE):
+        score += opline2
+    return score
+
+
+def play_ai(board):
+    score = -100
+    loc = play_random()
+    while not is_valid(game, loc[0], loc[1]):
+        loc = play_random()
+    row_choice = loc[0]
+    column_choice = loc[1]
+
+    for row in range(ROW_COUNT):
+        for col in range(COLUMN_COUNT):
+            new_board = np.array(board)
+            if is_valid(new_board, row, col):
+                play(new_board, row, col, AI)
+                score_temp = scorer(new_board)
+                if score_temp > score:
+                    score = score_temp
+                    row_choice = row
+                    column_choice = col
+    return row_choice, column_choice
+
+
+# END OF AI section ---------
+
+game = create_board()
+turn = random.choice([PLAYER, AI])
+
+while True:
+    if is_full(game):
+        print("GAME OVER")
+        break
+
+    print(game)
+    if turn == AI:
+        loc = play_ai(game)
+    else:
+        loc = play_user()
+        while not is_valid(game, loc[0], loc[1]):
+            loc = play_user()
+    play(game, loc[0], loc[1], turn)
+
+    if is_line(game, turn, LINE):
+        print("GAME OVER. {} Wins!".format(turn))
+        break
+
+    if turn == AI:
+        turn = PLAYER
+    else:
+        turn = AI
