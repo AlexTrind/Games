@@ -1,0 +1,184 @@
+import numpy as np
+import random
+import math
+
+PLAYER = 1
+AI = 2
+COLUMN_COUNT = 3
+ROW_COUNT = 3
+LINE = 3
+SUBLINE = 2
+DEPTH = 3
+
+
+# initiates initial board
+def create_board():
+    return np.zeros((3, 3), dtype=int)
+
+
+# adds a piece of a player into a board at specific row and col
+def play(board, row, col, player):
+    board[row, col] = player
+
+
+# checks if selected play position is vacant
+def is_valid(board, row, col):
+    return board[row, col] == 0
+
+
+# checks if board is full
+def is_full(board):
+    return np.count_nonzero(board == 0) == 0
+
+
+# obtains user input for piece location
+def user_selection():
+    row = int(input("select row (0-2):"))
+    col = int(input("select column (0-2):"))
+    return row, col
+
+
+# obtains a random input for piece location
+def random_selection():
+    row = random.choice(range(ROW_COUNT))
+    col = random.choice(range(COLUMN_COUNT))
+    return row, col
+
+
+# checks for lines existence for a player and a line length, returns boolean
+def is_line(board, player, line):
+    # check horizontal lines
+    for row in range(ROW_COUNT):
+        if np.count_nonzero(board[row, :] == player) == line and np.count_nonzero(board[row, :] == 0) == LINE - line:
+            return True
+    # check vertical lines
+    for col in range(COLUMN_COUNT):
+        if np.count_nonzero(board[:, col] == player) == line and np.count_nonzero(board[:, col] == 0) == LINE - line:
+            return True
+    # check diagonal ascending lines
+    count = 0
+    count_zero = 0
+    for i in range(ROW_COUNT):
+        if board[ROW_COUNT - 1 - i, i] == player:
+            count += 1
+        if board[ROW_COUNT - 1 - i, i] == 0:
+            count_zero += 1
+        if count == line and count_zero == LINE - line:
+            return True
+    # check diagonal descending lines
+    count = 0
+    count_zero = 0
+    for i in range(ROW_COUNT):
+        if board[i, i] == player:
+            count += 1
+        if board[i, i] == 0:
+            count_zero += 1
+        if count == line and count_zero == LINE - line:
+            return True
+    return False
+
+
+# AI section ---------
+
+# scoring system
+line2 = 5
+line3 = 100
+opline2 = -6
+
+
+# scorer function returns score for a board and a player
+def scorer(board, player):
+    if player == AI:
+        opponent = PLAYER
+    else:
+        opponent = AI
+
+    score = 0
+    if is_line(board, player, LINE):
+        score += line3
+    if is_line(board, player, SUBLINE):
+        score += line2
+    if is_line(board, opponent, SUBLINE):
+        score += opline2
+    return score
+
+
+# selects position randonly from a list of equivalent plays using AI driven by minimax algorithm 
+def ai_selection(board):
+    score = - math.inf
+    row_choice = None
+    column_choice = None
+    list = []
+    for row in range(ROW_COUNT):
+        for col in range(COLUMN_COUNT):
+            new_board = np.array(board)
+            if is_valid(new_board, row, col):
+                play(new_board, row, col, AI)
+                score_temp = minimax(new_board, DEPTH, False)
+                if score_temp >= score:
+                    score = score_temp
+                    row_choice = row
+                    column_choice = col
+                    list.append((row_choice, column_choice))
+    return random.choice(list)
+
+
+def minimax(board, depth, maximizingplayer):
+    if depth == 0 or is_full(board) or is_line(board, PLAYER, LINE) or is_line(board, AI, LINE):
+        if is_line(board, PLAYER, LINE):
+            return -1000
+        elif is_line(board, AI, LINE):
+            return 1000
+        elif depth == 0:
+            return scorer(board, AI)
+        else:
+            return 0
+
+    if maximizingplayer:
+        final_score = - math.inf
+        for row in range(ROW_COUNT):
+            for col in range(COLUMN_COUNT):
+                new_board = np.array(board)
+                if is_valid(new_board, row, col):
+                    play(new_board, row, col, AI)
+                    final_score = max(final_score, minimax(new_board, depth - 1, False))
+        return final_score
+    else:
+        final_score = math.inf
+        for row in range(ROW_COUNT):
+            for col in range(COLUMN_COUNT):
+                new_board = np.array(board)
+                if is_valid(new_board, row, col):
+                    play(new_board, row, col, PLAYER)
+                    final_score = min(final_score, minimax(new_board, depth - 1, True))
+        return final_score
+
+
+# END OF AI section ---------
+
+game = create_board()
+turn = random.choice([AI, PLAYER])
+
+while True:
+    print(game)
+    if turn == AI:
+        loc = ai_selection(game)
+    else:
+        loc = user_selection()
+        while not is_valid(game, loc[0], loc[1]):
+            loc = user_selection()
+    play(game, loc[0], loc[1], turn)
+
+    if is_line(game, turn, LINE):
+        print("GAME OVER. {} Wins!".format(turn))
+        break
+
+    if turn == AI:
+        turn = PLAYER
+    else:
+        turn = AI
+
+    if is_full(game):
+        print("GAME OVER")
+        break
+
